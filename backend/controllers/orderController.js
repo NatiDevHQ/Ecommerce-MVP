@@ -72,35 +72,42 @@ exports.createOrder = async (req, res) => {
 
 exports.getOrders = async (req, res) => {
   try {
+    // First get all orders for the user
     const [orders] = await db.pool.query(
       `
-      SELECT o.id, o.total_amount, o.status, o.created_at,
-             JSON_ARRAYAGG(
-               JSON_OBJECT(
-                 'product_id', oi.product_id,
-                 'name', p.name,
-                 'price', oi.price,
-                 'quantity', oi.quantity,
-                 'image_url', p.image_url
-               )
-             ) AS items
-      FROM orders o
-      JOIN order_items oi ON o.id = oi.order_id
-      JOIN products p ON oi.product_id = p.id
-      WHERE o.user_id = ?
-      GROUP BY o.id
-      ORDER BY o.created_at DESC
+      SELECT id, total_amount, status, created_at, shipping_info
+      FROM orders
+      WHERE user_id = ?
+      ORDER BY created_at DESC
     `,
       [req.userId]
     );
 
-    // Parse JSON items
-    const result = orders.map((order) => ({
-      ...order,
-      items: JSON.parse(order.items),
-    }));
+    // Then get items for each order
+    for (const order of orders) {
+      const [items] = await db.pool.query(
+        `
+        SELECT 
+          oi.product_id,
+          p.name,
+          oi.price,
+          oi.quantity,
+          p.image_url
+        FROM order_items oi
+        JOIN products p ON oi.product_id = p.id
+        WHERE oi.order_id = ?
+        `,
+        [order.id]
+      );
+      order.items = items;
 
-    res.json(result);
+      // Parse shipping_info if it's a string
+      if (typeof order.shipping_info === "string") {
+        order.shipping_info = JSON.parse(order.shipping_info);
+      }
+    }
+
+    res.json(orders);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -110,24 +117,13 @@ exports.getOrderDetails = async (req, res) => {
   try {
     const orderId = req.params.orderId;
 
+    // Get order basic info
     const [order] = await db.pool.query(
       `
-      SELECT o.id, o.total_amount, o.status, o.created_at, o.shipping_info,
-             JSON_ARRAYAGG(
-               JSON_OBJECT(
-                 'product_id', oi.product_id,
-                 'name', p.name,
-                 'price', oi.price,
-                 'quantity', oi.quantity,
-                 'image_url', p.image_url
-               )
-             ) AS items
-      FROM orders o
-      JOIN order_items oi ON o.id = oi.order_id
-      JOIN products p ON oi.product_id = p.id
-      WHERE o.id = ? AND o.user_id = ?
-      GROUP BY o.id
-    `,
+      SELECT id, total_amount, status, created_at, shipping_info
+      FROM orders
+      WHERE id = ? AND user_id = ?
+      `,
       [orderId, req.userId]
     );
 
@@ -135,12 +131,32 @@ exports.getOrderDetails = async (req, res) => {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    // Parse JSON data
+    // Get order items
+    const [items] = await db.pool.query(
+      `
+      SELECT 
+        oi.product_id,
+        p.name,
+        oi.price,
+        oi.quantity,
+        p.image_url
+      FROM order_items oi
+      JOIN products p ON oi.product_id = p.id
+      WHERE oi.order_id = ?
+      `,
+      [orderId]
+    );
+
+    // Prepare response
     const result = {
       ...order[0],
-      shipping_info: JSON.parse(order[0].shipping_info),
-      items: JSON.parse(order[0].items),
+      items: items,
     };
+
+    // Parse shipping_info if it's a string
+    if (typeof result.shipping_info === "string") {
+      result.shipping_info = JSON.parse(result.shipping_info);
+    }
 
     res.json(result);
   } catch (err) {

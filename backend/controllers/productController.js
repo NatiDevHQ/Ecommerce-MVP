@@ -1,7 +1,8 @@
-// productController.js should have:
 const db = require("../config/db");
-const Product = require("../models/Product"); // if using Model approach
-// Get all products
+const path = require("path");
+const fs = require("fs");
+
+// Get all products (unchanged)
 exports.getAllProducts = async (req, res) => {
   try {
     const [rows] = await db.pool.query("SELECT * FROM products");
@@ -9,7 +10,7 @@ exports.getAllProducts = async (req, res) => {
       ...product,
       keywords: JSON.parse(product.keywords || "[]"),
       image_url: product.image_url
-        ? `http://${req.headers.host}/uploads/${product.image_url}`
+        ? `${req.protocol}://${req.headers.host}/uploads/${product.image_url}`
         : null,
     }));
     res.status(200).json(products);
@@ -18,7 +19,7 @@ exports.getAllProducts = async (req, res) => {
   }
 };
 
-// Get product by ID
+// Get product by ID (unchanged)
 exports.getProductById = async (req, res) => {
   try {
     const [rows] = await db.pool.query("SELECT * FROM products WHERE id = ?", [
@@ -36,7 +37,7 @@ exports.getProductById = async (req, res) => {
     };
 
     if (product.image_url) {
-      response.image_url = `http://${req.headers.host}/uploads/${product.image_url}`;
+      response.image_url = `${req.protocol}://${req.headers.host}/uploads/${product.image_url}`;
     }
 
     res.json(response);
@@ -45,7 +46,7 @@ exports.getProductById = async (req, res) => {
   }
 };
 
-// Get distinct categories
+// Get distinct categories (unchanged)
 exports.getCategories = async (_, res) => {
   try {
     const [rows] = await db.pool.query(
@@ -58,7 +59,7 @@ exports.getCategories = async (_, res) => {
   }
 };
 
-// Search products with filters
+// Search products with filters (unchanged)
 exports.searchProducts = async (req, res) => {
   try {
     const { query, category, minPrice, maxPrice, sort } = req.query;
@@ -103,7 +104,7 @@ exports.searchProducts = async (req, res) => {
       };
 
       if (product.image_url) {
-        formatted.image_url = `http://${req.headers.host}/uploads/${product.image_url}`;
+        formatted.image_url = `${req.protocol}://${req.headers.host}/uploads/${product.image_url}`;
       }
 
       return formatted;
@@ -115,7 +116,7 @@ exports.searchProducts = async (req, res) => {
   }
 };
 
-// Create a new product
+// Create a new product (updated to match route)
 exports.createProduct = async (req, res) => {
   try {
     const {
@@ -126,6 +127,8 @@ exports.createProduct = async (req, res) => {
       stock_quantity = 0,
       keywords = [],
     } = req.body;
+
+    // Handle image upload from fields()
     const mainImage = req.files?.mainImage?.[0]?.filename || null;
 
     const sql = `
@@ -149,26 +152,51 @@ exports.createProduct = async (req, res) => {
     res.status(201).json({
       message: "Product created successfully",
       productId: result.insertId,
+      imageUrl: mainImage
+        ? `${req.protocol}://${req.headers.host}/uploads/${mainImage}`
+        : null,
     });
   } catch (err) {
     console.error(err);
+
+    // Clean up uploaded file if there was an error
+    if (req.files?.mainImage?.[0]?.path) {
+      fs.unlink(req.files.mainImage[0].path, (err) => {
+        if (err) console.error("Error deleting uploaded file:", err);
+      });
+    }
+
     res.status(500).json({ message: err.message });
   }
 };
 
-// Update a product
-
+// Update a product (updated to match route)
 exports.updateProduct = async (req, res) => {
   try {
     const productId = req.params.id;
     const {
       name,
       description,
-      price,
+      price, // Could be string or number
       category,
-      stock_quantity,
+      stock_quantity, // Could be string or number
       keywords = [],
     } = req.body;
+
+    // ===== ADD VALIDATION HERE =====
+    // Convert and validate numbers
+    const parsedPrice = parseFloat(price);
+    if (isNaN(parsedPrice)) {
+      return res.status(400).json({ message: "Price must be a number" });
+    }
+
+    const parsedStock = parseInt(stock_quantity);
+    if (isNaN(parsedStock)) {
+      return res.status(400).json({ message: "Stock must be an integer" });
+    }
+    // ===== END VALIDATION =====
+
+    // Handle image upload if new image was provided
     const mainImage = req.files?.mainImage?.[0]?.filename || null;
 
     let sql = `
@@ -185,9 +213,9 @@ exports.updateProduct = async (req, res) => {
     const values = [
       name,
       description,
-      parseFloat(price),
+      parsedPrice, // Use the validated number
       category,
-      parseInt(stock_quantity),
+      parsedStock, // Use the validated number
       JSON.stringify(keywords),
     ];
 
@@ -201,14 +229,27 @@ exports.updateProduct = async (req, res) => {
 
     await db.pool.query(sql, values);
 
-    res.json({ message: "Product updated successfully" });
+    res.json({
+      message: "Product updated successfully",
+      imageUrl: mainImage
+        ? `${req.protocol}://${req.headers.host}/uploads/${mainImage}`
+        : null,
+    });
   } catch (err) {
     console.error(err);
+
+    // Clean up uploaded file if there was an error
+    if (req.files?.mainImage?.[0]?.path) {
+      fs.unlink(req.files.mainImage[0].path, (err) => {
+        if (err) console.error("Error deleting uploaded file:", err);
+      });
+    }
+
     res.status(500).json({ message: err.message });
   }
 };
 
-// Delete a product
+// Delete a product (updated to handle image cleanup)
 exports.deleteProduct = async (req, res) => {
   try {
     const productId = req.params.id;
@@ -222,6 +263,18 @@ exports.deleteProduct = async (req, res) => {
       return res.status(404).json({ message: "Product not found" });
     }
 
+    // Delete associated image file if exists
+    if (product[0].image_url) {
+      const imagePath = path.join(
+        __dirname,
+        "../uploads",
+        product[0].image_url
+      );
+      if (fs.existsSync(imagePath)) {
+        fs.unlinkSync(imagePath);
+      }
+    }
+
     await db.pool.query("DELETE FROM products WHERE id = ?", [productId]);
 
     res.json({ message: "Product deleted successfully" });
@@ -231,7 +284,7 @@ exports.deleteProduct = async (req, res) => {
   }
 };
 
-// Update product image (MySQL version)
+// Update product image only (updated to match route)
 exports.updateProductImage = async (req, res) => {
   try {
     const productId = req.params.id;
@@ -240,24 +293,65 @@ exports.updateProductImage = async (req, res) => {
       return res.status(400).json({ message: "No image uploaded" });
     }
 
-    const imageUrl = req.file.filename;
+    // First get the old image to delete it
+    const [product] = await db.pool.query(
+      "SELECT image_url FROM products WHERE id = ?",
+      [productId]
+    );
+
+    if (product.length === 0) {
+      // Clean up the uploaded file since we won't be using it
+      if (req.file.path) {
+        fs.unlink(req.file.path, (err) => {
+          if (err) console.error("Error deleting uploaded file:", err);
+        });
+      }
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    const newImage = req.file.filename;
+    let oldImagePath = null;
+
+    // Delete old image if exists
+    if (product[0].image_url) {
+      oldImagePath = path.join(__dirname, "../uploads", product[0].image_url);
+    }
 
     const [result] = await db.pool.query(
       "UPDATE products SET image_url = ? WHERE id = ?",
-      [imageUrl, productId]
+      [newImage, productId]
     );
 
     if (result.affectedRows === 0) {
+      // Clean up the uploaded file since we won't be using it
+      if (req.file.path) {
+        fs.unlink(req.file.path, (err) => {
+          if (err) console.error("Error deleting uploaded file:", err);
+        });
+      }
       return res.status(404).json({ message: "Product not found" });
+    }
+
+    // Delete old image after successful update
+    if (oldImagePath && fs.existsSync(oldImagePath)) {
+      fs.unlinkSync(oldImagePath);
     }
 
     res.status(200).json({
       success: true,
       message: "Image updated successfully",
-      imageUrl: `http://${req.headers.host}/uploads/${imageUrl}`,
+      imageUrl: `${req.protocol}://${req.headers.host}/uploads/${newImage}`,
     });
   } catch (error) {
     console.error(error);
+
+    // Clean up uploaded file if there was an error
+    if (req.file?.path) {
+      fs.unlink(req.file.path, (err) => {
+        if (err) console.error("Error deleting uploaded file:", err);
+      });
+    }
+
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };

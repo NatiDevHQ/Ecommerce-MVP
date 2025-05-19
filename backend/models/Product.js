@@ -53,6 +53,15 @@ class Product {
     const [rows] = await db.pool.query(sql, params);
     return rows;
   }
+
+  static async create({ name, description, price, category, images }) {
+    const sql = `
+      INSERT INTO products (name, description, price, category, image1, image2, image3, image4, image5, image6)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    const values = [name, description, price, category, ...images];
+    await db.pool.query(sql, values);
+  }
 }
 
 module.exports = Product;

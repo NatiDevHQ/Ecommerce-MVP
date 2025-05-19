@@ -8,6 +8,7 @@ const cartRoutes = require("./routes/cartRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 
 const app = express();
+app.use('/uploads', express.static('uploads'));
 
 // Middleware
 app.use(cors());
@@ -25,18 +26,17 @@ app.use("/api/products", productRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/orders", orderRoutes);
 
+// Serve static files from frontend
+app.use(express.static("backend/frontend")); // Adjusted to serve static files from the frontend folder
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send("Something broke!");
 });
 
-// Serve static files from frontend in production
-if (process.env.NODE_ENV === "production") {
-  app.use(express.static("frontend"));
-}
-
+// Set the PORT
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port http://localhost:${PORT}`);
 });

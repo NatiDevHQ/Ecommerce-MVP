@@ -1,60 +1,36 @@
 const express = require("express");
-const router = express.Router();
-const productController = require("../controllers/productController");
 const multer = require("multer");
-const path = require("path");
+const {
+  getAllProducts,
+  getProductById,
+  getCategories,
+  searchProducts,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+  updateProductImage,
+} = require("../controllers/productController.js");
 
-// Multer config
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/");
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  },
-});
-const upload = multer({ storage });
+const router = express.Router();
 
-// POST route to add product with multiple images
+// Multer setup (simplified)
+const upload = multer({ dest: "uploads/" });
+
+router.get("/", getAllProducts);
+router.get("/search", searchProducts);
+router.get("/categories", getCategories);
+router.get("/:id", getProductById);
 router.post(
-  "/products",
-  upload.fields([
-    { name: "mainImage", maxCount: 1 }, // Main product image
-    { name: "additionalImages", maxCount: 5 }, // Up to 5 additional images
-  ]),
-  productController.createProduct
+  "/",
+  upload.fields([{ name: "mainImage", maxCount: 1 }]),
+  createProduct
 );
-
-// GET all products
-router.get("/products", productController.getAllProducts);
-
-// GET product categories
-router.get("/products/categories", productController.getCategories);
-
-// Search products
-router.get("/products/search", productController.searchProducts);
-
-// GET product by ID
-router.get("/products/:id", productController.getProductById);
-
-// PUT update product
 router.put(
-  "/products/:id",
-  upload.fields([
-    { name: "mainImage", maxCount: 1 },
-    { name: "additionalImages", maxCount: 5 },
-  ]),
-  productController.updateProduct
+  "/:id",
+  upload.fields([{ name: "mainImage", maxCount: 1 }]),
+  updateProduct
 );
-
-// PATCH to update product image
-router.patch(
-  "/products/:id/image",
-  upload.single("image"),
-  productController.updateProductImage
-);
-
-// DELETE product
-router.delete("/products/:id", productController.deleteProduct);
+router.patch("/:id/image", upload.single("mainImage"), updateProductImage);
+router.delete("/:id", deleteProduct);
 
 module.exports = router;

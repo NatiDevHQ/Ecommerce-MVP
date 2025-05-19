@@ -8,7 +8,7 @@ const cartRoutes = require("./routes/cartRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 
 const app = express();
-app.use('/uploads', express.static('uploads'));
+app.use("/uploads", express.static("uploads"));
 
 // Middleware
 app.use(cors());
@@ -30,9 +30,26 @@ app.use("/api/orders", orderRoutes);
 app.use(express.static("backend/frontend")); // Adjusted to serve static files from the frontend folder
 
 // Error handling middleware
+// Replace your error handling middleware with this:
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send("Something broke!");
+  console.error("Error Stack:", err.stack);
+
+  // Handle Multer errors specifically
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({
+      success: false,
+      message: "File upload error",
+      error: err.message,
+    });
+  }
+
+  // Handle other errors
+  res.status(500).json({
+    success: false,
+    message: "Internal server error",
+    error: process.env.NODE_ENV === "development" ? err.message : undefined,
+    stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
+  });
 });
 
 // Set the PORT

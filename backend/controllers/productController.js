@@ -1,24 +1,18 @@
+// productController.js should have:
 const db = require("../config/db");
-
+const Product = require("../models/Product"); // if using Model approach
 // Get all products
 exports.getAllProducts = async (req, res) => {
   try {
     const [rows] = await db.pool.query("SELECT * FROM products");
-
-    const products = rows.map((product) => {
-      const formatted = {
-        ...product,
-        keywords: JSON.parse(product.keywords || "[]"),
-      };
-
-      if (product.image_url) {
-        formatted.image_url = `http://${req.headers.host}/uploads/${product.image_url}`;
-      }
-
-      return formatted;
-    });
-
-    res.json(products);
+    const products = rows.map((product) => ({
+      ...product,
+      keywords: JSON.parse(product.keywords || "[]"),
+      image_url: product.image_url
+        ? `http://${req.headers.host}/uploads/${product.image_url}`
+        : null,
+    }));
+    res.status(200).json(products);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -52,7 +46,7 @@ exports.getProductById = async (req, res) => {
 };
 
 // Get distinct categories
-exports.getCategories = async (req, res) => {
+exports.getCategories = async (_, res) => {
   try {
     const [rows] = await db.pool.query(
       "SELECT DISTINCT category FROM products"
@@ -163,6 +157,7 @@ exports.createProduct = async (req, res) => {
 };
 
 // Update a product
+
 exports.updateProduct = async (req, res) => {
   try {
     const productId = req.params.id;

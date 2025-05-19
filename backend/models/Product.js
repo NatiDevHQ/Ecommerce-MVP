@@ -76,7 +76,7 @@ class Product {
     description,
     price,
     category,
-    image_urls = [],
+    image_url, // Changed from image_urls
     stock_quantity = 0,
     keywords = [],
   }) {
@@ -90,7 +90,7 @@ class Product {
       description,
       price,
       category,
-      JSON.stringify(image_urls),
+      image_url, // No JSON.stringify here if storing as string
       stock_quantity,
       JSON.stringify(keywords),
     ];

@@ -25,8 +25,9 @@ class Product {
     const params = [];
 
     if (query) {
-      sql += " AND (name LIKE ? OR description LIKE ?)";
-      params.push(`%${query}%`, `%${query}%`);
+      sql +=
+        " AND (name LIKE ? OR description LIKE ? OR JSON_CONTAINS(keywords, JSON_QUOTE(?)))";
+      params.push(`%${query}%`, `%${query}%`, query);
     }
 
     if (category) {
@@ -48,19 +49,74 @@ class Product {
       sql += " ORDER BY price ASC";
     } else if (sort === "price_desc") {
       sql += " ORDER BY price DESC";
+    } else if (sort === "newest") {
+      sql += " ORDER BY created_at DESC";
     }
 
     const [rows] = await db.pool.query(sql, params);
     return rows;
   }
 
-  static async create({ name, description, price, category, images }) {
+  static async create({
+    name,
+    description,
+    price,
+    category,
+    image_url,
+    stock_quantity = 0,
+    keywords = [],
+  }) {
     const sql = `
-      INSERT INTO products (name, description, price, category, image1, image2, image3, image4, image5, image6)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO products 
+        (name, description, price, category, image_url, stock_quantity, keywords) 
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
-    const values = [name, description, price, category, ...images];
+    const values = [
+      name,
+      description,
+      price,
+      category,
+      image_url,
+      stock_quantity,
+      JSON.stringify(keywords),
+    ];
+
+    const [result] = await db.pool.query(sql, values);
+    return result.insertId;
+  }
+
+  static async update(
+    id,
+    { name, description, price, category, image_url, stock_quantity, keywords }
+  ) {
+    const sql = `
+      UPDATE products 
+      SET 
+        name = ?, 
+        description = ?, 
+        price = ?, 
+        category = ?, 
+        image_url = ?, 
+        stock_quantity = ?, 
+        keywords = ?
+      WHERE id = ?
+    `;
+    const values = [
+      name,
+      description,
+      price,
+      category,
+      image_url,
+      stock_quantity,
+      JSON.stringify(keywords),
+      id,
+    ];
+
     await db.pool.query(sql, values);
+  }
+
+  static async delete(id) {
+    await db.pool.query("DELETE FROM products WHERE id = ?", [id]);
   }
 }
 

@@ -15,28 +15,39 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
- 
-
-//  New POST route to add product with 6 images
+// POST route to add product with multiple images
 router.post(
   "/",
   upload.fields([
-    { name: "image1", maxCount: 1 },
-    { name: "image2", maxCount: 1 },
-    { name: "image3", maxCount: 1 },
-    { name: "image4", maxCount: 1 },
-    { name: "image5", maxCount: 1 },
-    { name: "image6", maxCount: 1 },
+    { name: "mainImage", maxCount: 1 }, // Main product image
+    { name: "additionalImages", maxCount: 5 }, // Up to 5 additional images
   ]),
   productController.createProduct
 );
 
-
-// Other routes
+// GET all products
 router.get("/", productController.getAllProducts);
+
+// GET product categories
 router.get("/categories", productController.getCategories);
+
+// Search products
 router.get("/search", productController.searchProducts);
+
+// GET product by ID
 router.get("/:id", productController.getProductById);
 
-module.exports = router;
+// PUT update product
+router.put(
+  "/:id",
+  upload.fields([
+    { name: "mainImage", maxCount: 1 },
+    { name: "additionalImages", maxCount: 5 },
+  ]),
+  productController.updateProduct
+);
 
+// DELETE product
+router.delete("/:id", productController.deleteProduct);
+
+module.exports = router;

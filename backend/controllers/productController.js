@@ -5,17 +5,22 @@ exports.getAllProducts = async (req, res) => {
   try {
     const [rows] = await db.pool.query("SELECT * FROM products");
 
-    // Append full image URL
-    const updatedRows = rows.map(product => {
-      for (let i = 1; i <= 6; i++) {
-        if (product[`image${i}`]) {
-          product[`image${i}`] = `http://localhost:5000/uploads/${product[`image${i}`]}`;
-        }
+    // Append full image URL if exists
+    const products = rows.map((product) => {
+      if (product.image_url) {
+        return {
+          ...product,
+          image_url: `http://${req.headers.host}/uploads/${product.image_url}`,
+          keywords: JSON.parse(product.keywords || "[]"),
+        };
       }
-      return product;
+      return {
+        ...product,
+        keywords: JSON.parse(product.keywords || "[]"),
+      };
     });
 
-    res.json(updatedRows);
+    res.json(products);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -32,15 +37,18 @@ exports.getProductById = async (req, res) => {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    // Append image URLs
     const product = rows[0];
-    for (let i = 1; i <= 6; i++) {
-      if (product[`image${i}`]) {
-        product[`image${i}`] = `http://localhost:5000/uploads/${product[`image${i}`]}`;
-      }
+    // Format response
+    const response = {
+      ...product,
+      keywords: JSON.parse(product.keywords || "[]"),
+    };
+
+    if (product.image_url) {
+      response.image_url = `http://${req.headers.host}/uploads/${product.image_url}`;
     }
 
-    res.json(product);
+    res.json(response);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -52,7 +60,7 @@ exports.getCategories = async (req, res) => {
     const [rows] = await db.pool.query(
       "SELECT DISTINCT category FROM products"
     );
-    const categories = rows.map(row => row.category);
+    const categories = rows.map((row) => row.category);
     res.json(categories);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -67,8 +75,9 @@ exports.searchProducts = async (req, res) => {
     const params = [];
 
     if (query) {
-      sql += " AND (name LIKE ? OR description LIKE ?)";
-      params.push(`%${query}%`, `%${query}%`);
+      sql +=
+        " AND (name LIKE ? OR description LIKE ? OR JSON_CONTAINS(keywords, JSON_QUOTE(?)))";
+      params.push(`%${query}%`, `%${query}%`, query);
     }
 
     if (category) {
@@ -90,21 +99,27 @@ exports.searchProducts = async (req, res) => {
       sql += " ORDER BY price ASC";
     } else if (sort === "price_desc") {
       sql += " ORDER BY price DESC";
+    } else if (sort === "newest") {
+      sql += " ORDER BY created_at DESC";
     }
 
     const [rows] = await db.pool.query(sql, params);
 
-    // Append full image URLs
-    const updatedRows = rows.map(product => {
-      for (let i = 1; i <= 6; i++) {
-        if (product[`image${i}`]) {
-          product[`image${i}`] = `http://localhost:5000/uploads/${product[`image${i}`]}`;
-        }
+    // Format products with full image URLs and parsed keywords
+    const products = rows.map((product) => {
+      const formatted = {
+        ...product,
+        keywords: JSON.parse(product.keywords || "[]"),
+      };
+
+      if (product.image_url) {
+        formatted.image_url = `http://${req.headers.host}/uploads/${product.image_url}`;
       }
-      return product;
+
+      return formatted;
     });
 
-    res.json(updatedRows);
+    res.json(products);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -113,24 +128,119 @@ exports.searchProducts = async (req, res) => {
 // Create a new product
 exports.createProduct = async (req, res) => {
   try {
-    console.log("BODY:", req.body);
-    console.log("FILES:", req.files);
+    const {
+      name,
+      description,
+      price,
+      category,
+      stock_quantity = 0,
+      keywords = [],
+    } = req.body;
 
-    const { name, description, price, category } = req.body;
-    const imageFiles = req.files;
-    const imagePaths = Array.from({ length: 6 }, (_, i) =>
-      imageFiles[`image${i + 1}`]?.[0]?.filename || null
-    );
+    // Get the main image filename (if uploaded)
+    const mainImage = req.files?.mainImage?.[0]?.filename || null;
 
     const sql = `
-      INSERT INTO products (name, description, price, category, image1, image2, image3, image4, image5, image6)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO products 
+        (name, description, price, category, image_url, stock_quantity, keywords)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
 
-    const values = [name, description, price, category, ...imagePaths];
+    const values = [
+      name,
+      description,
+      parseFloat(price),
+      category,
+      mainImage,
+      parseInt(stock_quantity),
+      JSON.stringify(keywords),
+    ];
+
+    const [result] = await db.pool.query(sql, values);
+
+    res.status(201).json({
+      message: "Product created successfully",
+      productId: result.insertId,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Update a product
+exports.updateProduct = async (req, res) => {
+  try {
+    const productId = req.params.id;
+    const {
+      name,
+      description,
+      price,
+      category,
+      stock_quantity,
+      keywords = [],
+    } = req.body;
+
+    // Get the main image filename if a new one was uploaded
+    const mainImage = req.files?.mainImage?.[0]?.filename || null;
+
+    let sql = `
+      UPDATE products 
+      SET 
+        name = ?, 
+        description = ?, 
+        price = ?, 
+        category = ?,
+        stock_quantity = ?,
+        keywords = ?
+    `;
+
+    const values = [
+      name,
+      description,
+      parseFloat(price),
+      category,
+      parseInt(stock_quantity),
+      JSON.stringify(keywords),
+    ];
+
+    // Only update image if a new one was provided
+    if (mainImage) {
+      sql += `, image_url = ?`;
+      values.push(mainImage);
+    }
+
+    sql += ` WHERE id = ?`;
+    values.push(productId);
 
     await db.pool.query(sql, values);
-    res.status(201).json({ message: "Product created successfully" });
+
+    res.json({ message: "Product updated successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Delete a product
+exports.deleteProduct = async (req, res) => {
+  try {
+    const productId = req.params.id;
+
+    // First get the product to check for image files that need to be deleted
+    const [product] = await db.pool.query(
+      "SELECT image_url FROM products WHERE id = ?",
+      [productId]
+    );
+
+    if (product.length === 0) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    // Delete the product
+    await db.pool.query("DELETE FROM products WHERE id = ?", [productId]);
+
+    res.json({ message: "Product deleted successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: err.message });

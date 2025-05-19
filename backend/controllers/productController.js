@@ -5,19 +5,17 @@ exports.getAllProducts = async (req, res) => {
   try {
     const [rows] = await db.pool.query("SELECT * FROM products");
 
-    // Append full image URL if exists
     const products = rows.map((product) => {
-      if (product.image_url) {
-        return {
-          ...product,
-          image_url: `http://${req.headers.host}/uploads/${product.image_url}`,
-          keywords: JSON.parse(product.keywords || "[]"),
-        };
-      }
-      return {
+      const formatted = {
         ...product,
         keywords: JSON.parse(product.keywords || "[]"),
       };
+
+      if (product.image_url) {
+        formatted.image_url = `http://${req.headers.host}/uploads/${product.image_url}`;
+      }
+
+      return formatted;
     });
 
     res.json(products);
@@ -38,7 +36,6 @@ exports.getProductById = async (req, res) => {
     }
 
     const product = rows[0];
-    // Format response
     const response = {
       ...product,
       keywords: JSON.parse(product.keywords || "[]"),
@@ -105,7 +102,6 @@ exports.searchProducts = async (req, res) => {
 
     const [rows] = await db.pool.query(sql, params);
 
-    // Format products with full image URLs and parsed keywords
     const products = rows.map((product) => {
       const formatted = {
         ...product,
@@ -136,8 +132,6 @@ exports.createProduct = async (req, res) => {
       stock_quantity = 0,
       keywords = [],
     } = req.body;
-
-    // Get the main image filename (if uploaded)
     const mainImage = req.files?.mainImage?.[0]?.filename || null;
 
     const sql = `
@@ -180,8 +174,6 @@ exports.updateProduct = async (req, res) => {
       stock_quantity,
       keywords = [],
     } = req.body;
-
-    // Get the main image filename if a new one was uploaded
     const mainImage = req.files?.mainImage?.[0]?.filename || null;
 
     let sql = `
@@ -204,7 +196,6 @@ exports.updateProduct = async (req, res) => {
       JSON.stringify(keywords),
     ];
 
-    // Only update image if a new one was provided
     if (mainImage) {
       sql += `, image_url = ?`;
       values.push(mainImage);
@@ -227,7 +218,6 @@ exports.deleteProduct = async (req, res) => {
   try {
     const productId = req.params.id;
 
-    // First get the product to check for image files that need to be deleted
     const [product] = await db.pool.query(
       "SELECT image_url FROM products WHERE id = ?",
       [productId]
@@ -237,12 +227,42 @@ exports.deleteProduct = async (req, res) => {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    // Delete the product
     await db.pool.query("DELETE FROM products WHERE id = ?", [productId]);
 
     res.json({ message: "Product deleted successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: err.message });
+  }
+};
+
+// Update product image (MySQL version)
+exports.updateProductImage = async (req, res) => {
+  try {
+    const productId = req.params.id;
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No image uploaded" });
+    }
+
+    const imageUrl = req.file.filename;
+
+    const [result] = await db.pool.query(
+      "UPDATE products SET image_url = ? WHERE id = ?",
+      [imageUrl, productId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Image updated successfully",
+      imageUrl: `http://${req.headers.host}/uploads/${imageUrl}`,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 };

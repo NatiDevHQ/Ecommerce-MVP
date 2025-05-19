@@ -3,14 +3,23 @@ const db = require("../config/db");
 class Product {
   static async findAll() {
     const [rows] = await db.pool.query("SELECT * FROM products");
-    return rows;
+    return rows.map((row) => ({
+      ...row,
+      image_url: JSON.parse(row.image_url || "[]"),
+      keywords: JSON.parse(row.keywords || "[]"),
+    }));
   }
 
   static async findById(id) {
     const [rows] = await db.pool.query("SELECT * FROM products WHERE id = ?", [
       id,
     ]);
-    return rows[0];
+    const product = rows[0];
+    if (product) {
+      product.image_url = JSON.parse(product.image_url || "[]");
+      product.keywords = JSON.parse(product.keywords || "[]");
+    }
+    return product;
   }
 
   static async getCategories() {
@@ -54,7 +63,12 @@ class Product {
     }
 
     const [rows] = await db.pool.query(sql, params);
-    return rows;
+
+    return rows.map((row) => ({
+      ...row,
+      image_url: JSON.parse(row.image_url || "[]"),
+      keywords: JSON.parse(row.keywords || "[]"),
+    }));
   }
 
   static async create({
@@ -62,7 +76,7 @@ class Product {
     description,
     price,
     category,
-    image_url,
+    image_urls = [],
     stock_quantity = 0,
     keywords = [],
   }) {
@@ -76,7 +90,7 @@ class Product {
       description,
       price,
       category,
-      image_url,
+      JSON.stringify(image_urls),
       stock_quantity,
       JSON.stringify(keywords),
     ];
@@ -87,7 +101,15 @@ class Product {
 
   static async update(
     id,
-    { name, description, price, category, image_url, stock_quantity, keywords }
+    {
+      name,
+      description,
+      price,
+      category,
+      image_urls = [],
+      stock_quantity,
+      keywords = [],
+    }
   ) {
     const sql = `
       UPDATE products 
@@ -106,7 +128,7 @@ class Product {
       description,
       price,
       category,
-      image_url,
+      JSON.stringify(image_urls),
       stock_quantity,
       JSON.stringify(keywords),
       id,

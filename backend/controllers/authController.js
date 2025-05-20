@@ -2,12 +2,10 @@ const db = require("../config/db");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
-// Move secret to environment variable (create .env file)
 const JWT_SECRET =
   process.env.JWT_SECRET || "wM4+xop!Q^NxuFgfsdf9nVsx83kkxlnfF+Ffd==K!";
-const JWT_EXPIRES_IN = "1h";
+const JWT_EXPIRES_IN = "1d"; // same as second code
 
-// Input validation helpers
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validatePassword = (password) => password.length >= 8;
 
@@ -15,7 +13,6 @@ exports.register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
-    // Input validation
     if (!username || !email || !password) {
       return res.status(400).json({
         success: false,
@@ -37,7 +34,6 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Check if user exists
     const [existing] = await db.pool.query(
       "SELECT * FROM users WHERE username = ? OR email = ?",
       [username, email]
@@ -50,18 +46,22 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
     const [result] = await db.pool.query(
       "INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
       [username, email, hashedPassword]
     );
 
-    // Generate token for immediate login after registration
     const token = jwt.sign({ userId: result.insertId, username }, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN,
+    });
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 24 * 60 * 60 * 1000,
     });
 
     res.status(201).json({
@@ -86,33 +86,29 @@ exports.register = async (req, res) => {
 
 exports.login = async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { email, password } = req.body;
 
-    // Basic input validation
-    if (!username || !password) {
+    if (!email || !password) {
       return res.status(400).json({
         success: false,
-        message: "Username and password are required",
+        message: "Email and password are required",
       });
     }
 
-    // Find user
-    const [users] = await db.pool.query(
-      "SELECT * FROM users WHERE username = ?",
-      [username]
-    );
+    const [users] = await db.pool.query("SELECT * FROM users WHERE email = ?", [
+      email,
+    ]);
 
     if (users.length === 0) {
-      return res.status(401).json({
+      return res.status(404).json({
         success: false,
-        message: "Invalid credentials",
+        message: "User not found",
       });
     }
 
     const user = users[0];
-
-    // Check password
     const isMatch = await bcrypt.compare(password, user.password);
+
     if (!isMatch) {
       return res.status(401).json({
         success: false,
@@ -120,14 +116,19 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Generate JWT token
     const token = jwt.sign(
       { userId: user.id, username: user.username },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );
 
-    // Omit password from response
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+
     const { password: _, ...userData } = user;
 
     res.json({
@@ -146,6 +147,19 @@ exports.login = async (req, res) => {
       error: err.message,
     });
   }
+};
+
+exports.logout = (req, res) => {
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "Logout successful",
+  });
 };
 
 exports.getUser = async (req, res) => {

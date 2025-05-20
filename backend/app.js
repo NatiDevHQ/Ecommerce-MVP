@@ -14,7 +14,8 @@ app.use("/uploads", express.static("uploads"));
 // Middleware
 app.use(
   cors({
-    origin: "http://localhost:5501", // Your frontend URL
+    origin: "http://127.0.0.1:5500", // Adjust this to your frontend URL
+    methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
 );

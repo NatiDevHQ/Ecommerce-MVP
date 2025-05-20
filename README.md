@@ -21,6 +21,7 @@ Content-Type: application/json
   "password": "Test@1234"
 }
 ```
+
 ✅ **Expected Response** (201 Created):
 ```json
 {
@@ -171,6 +172,12 @@ Authorization: Bearer {{token}}
 1. Register → Login → Add to Cart → Create Order → View Orders
 2. Browse products without login
 3. Update cart quantities
+
+### new added things on the test:
+1. logout
+2. me
+3. upload img
+ 
 
 ### Error Cases:
 1. Register with existing username (should fail)

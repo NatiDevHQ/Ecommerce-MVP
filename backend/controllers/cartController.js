@@ -1,26 +1,39 @@
 const db = require("../config/db");
 
+// GET /api/cart
 exports.getCart = async (req, res) => {
   try {
     const [cartItems] = await db.pool.query(
       `
-      SELECT ci.product_id, p.name, p.price, p.image_url, ci.quantity 
+      SELECT 
+        ci.product_id, 
+        p.name, 
+        p.price, 
+        p.image_url, 
+        ci.quantity,
+        (p.price * ci.quantity) AS subtotal
       FROM cart_items ci
       JOIN products p ON ci.product_id = p.id
       WHERE ci.user_id = ?
-    `,
+      `,
       [req.userId]
     );
 
     res.json(cartItems);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("getCart error:", err);
+    res.status(500).json({ message: "Failed to retrieve cart items" });
   }
 };
 
+// POST /api/cart
 exports.addToCart = async (req, res) => {
   try {
     const { productId, quantity } = req.body;
+
+    if (!productId || !quantity || quantity < 1) {
+      return res.status(400).json({ message: "Invalid product or quantity" });
+    }
 
     // Check if product exists
     const [product] = await db.pool.query(
@@ -32,7 +45,7 @@ exports.addToCart = async (req, res) => {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    // Check if item already in cart
+    // Check if item already exists
     const [existing] = await db.pool.query(
       "SELECT * FROM cart_items WHERE user_id = ? AND product_id = ?",
       [req.userId, productId]
@@ -45,7 +58,7 @@ exports.addToCart = async (req, res) => {
         [quantity, req.userId, productId]
       );
     } else {
-      // Add new item
+      // Insert new item
       await db.pool.query(
         "INSERT INTO cart_items (user_id, product_id, quantity) VALUES (?, ?, ?)",
         [req.userId, productId, quantity]
@@ -54,37 +67,54 @@ exports.addToCart = async (req, res) => {
 
     res.json({ message: "Product added to cart" });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("addToCart error:", err);
+    res.status(500).json({ message: "Failed to add item to cart" });
   }
 };
 
+// PUT /api/cart/:productId
 exports.updateCartItem = async (req, res) => {
   try {
     const { quantity } = req.body;
     const productId = req.params.productId;
 
-    await db.pool.query(
+    if (!quantity || quantity < 1) {
+      return res.status(400).json({ message: "Invalid quantity" });
+    }
+
+    const [result] = await db.pool.query(
       "UPDATE cart_items SET quantity = ? WHERE user_id = ? AND product_id = ?",
       [quantity, req.userId, productId]
     );
 
-    res.json({ message: "Cart updated" });
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Cart item not found" });
+    }
+
+    res.json({ message: "Cart item updated" });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("updateCartItem error:", err);
+    res.status(500).json({ message: "Failed to update cart item" });
   }
 };
 
+// DELETE /api/cart/:productId
 exports.removeFromCart = async (req, res) => {
   try {
     const productId = req.params.productId;
 
-    await db.pool.query(
+    const [result] = await db.pool.query(
       "DELETE FROM cart_items WHERE user_id = ? AND product_id = ?",
       [req.userId, productId]
     );
 
-    res.json({ message: "Product removed from cart" });
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Cart item not found" });
+    }
+
+    res.json({ message: "Cart item removed" });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("removeFromCart error:", err);
+    res.status(500).json({ message: "Failed to remove cart item" });
   }
 };

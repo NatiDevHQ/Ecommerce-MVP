@@ -35,7 +35,7 @@ POST {{base_url}}/api/auth/login
 Content-Type: application/json
 
 {
-  "username": "testuser",
+    "email": "test@example.com",
   "password": "Test@1234"
 }
 ```

@@ -21,6 +21,7 @@ Content-Type: application/json
   "password": "Test@1234"
 }
 ```
+
 ✅ **Expected Response** (201 Created):
 ```json
 {
@@ -34,7 +35,7 @@ POST {{base_url}}/api/auth/login
 Content-Type: application/json
 
 {
-  "username": "testuser",
+    "email": "test@example.com",
   "password": "Test@1234"
 }
 ```
@@ -172,6 +173,12 @@ Authorization: Bearer {{token}}
 2. Browse products without login
 3. Update cart quantities
 
+### new added things on the test:
+1. logout
+2. me
+3. upload img
+ 
+
 ### Error Cases:
 1. Register with existing username (should fail)
 2. Add invalid product to cart (should fail)
@@ -189,3 +196,6 @@ pm.test("Has token", () => pm.expect(pm.response.json()).to.have.property('token
 ```
 
 Let me know if you'd like me to explain any part in more detail! 😊
+
+
+for the front-end visit here:-https://github.com/eyob-030/E-commerce-Frontend

@@ -166,7 +166,7 @@ Authorization: Bearer {{token}}
 ]
 ```
 
-## 🧪 Test Cases to Verify
+## 🧪 Test Cases to Verify Group
 
 ### Happy Path Tests:
 1. Register → Login → Add to Cart → Create Order → View Orders

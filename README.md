@@ -195,7 +195,7 @@ pm.test("Status is 200", () => pm.response.to.have.status(200));
 pm.test("Has token", () => pm.expect(pm.response.json()).to.have.property('token'));
 ```
 
-Let me know if you'd like me to explain any part in more detail! 😊
+
 
 
 for the front-end visit here:-https://github.com/eyob-030/E-commerce-Frontend

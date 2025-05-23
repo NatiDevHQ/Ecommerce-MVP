@@ -184,16 +184,7 @@ Authorization: Bearer {{token}}
 2. Add invalid product to cart (should fail)
 3. Checkout with empty cart (should fail)
 
-## 📝 Postman Tips
-1. **Save requests** in a collection
-2. **Set environment variables** for `token` after login
-3. **Add tests** to verify responses automatically
 
-Example test script (add to Login request):
-```javascript
-pm.test("Status is 200", () => pm.response.to.have.status(200));
-pm.test("Has token", () => pm.expect(pm.response.json()).to.have.property('token'));
-```
 
 
 

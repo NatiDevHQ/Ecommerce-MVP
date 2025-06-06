@@ -1,6 +1,6 @@
 
 
-# 🛒 E-Commerce API Testing
+# 🛒 E-Commerce API Testing Guidelines 
 
 ## 📌 Before You Start
 1. **Ensure backend is running** at `http://localhost:5000`
